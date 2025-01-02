@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dumbbell Chest Press</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background-color: #333;
+            color: #FFEB99;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+            height: 100vh;
+            position: relative;
+            padding-top: 20px; /* 增加上方空間 */
+        }
+
+        .home-button {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            width: 40px;
+            height: 40px;
+            background-color: #555;
+            border: 2px solid white;
+            border-radius: 5px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .container {
+            margin-top: 20px; /* 影片與標題之間的間距 */
+        }
+
+        video {
+            width: 90%; /* 縮小影片寬度 */
+            max-width: 600px;
+            margin: 10px 0;
+            border: 2px solid #FFEB99; /* 增加影片邊框 */
+            border-radius: 10px; /* 邊角圓滑 */
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+        }
+
+        #exerciseDescription {
+            font-size: 14px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="home-button" onclick="window.location.href='interface.html'">⬅️</div>
+    <header>
+        <h1>Dumbbell Chest Press</h1>
+    </header>
+    <p id="exerciseDescription">Bench 調整至適當角度（大約30-45度），啞鈴由肩膀推起，手肘保持垂直，手臂與胸線平行。上推時節奏快且吐氣、下放時慢然後吸氣。</p>
+    <div class="container">
+        <video id="standardVideo" controls>
+            <source src="dumbbell_chest_press.mp4" type="video/mp4">
+            您的瀏覽器不支援播放影片。
+        </video>
+        <video id="userCamera" autoplay muted></video>
+    </div>
+    <div>
+        <button id="startBtn">開始錄製</button>
+    </div>
+    <p id="similarityDisplay">相似度: 未知</p>
+    <script>
+        const userCamera = document.getElementById("userCamera");
+        const standardVideo = document.getElementById("standardVideo");
+        const startBtn = document.getElementById("startBtn");
+        const similarityDisplay = document.getElementById("similarityDisplay");
+
+        let mediaRecorder;
+        let recordedChunks = [];
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                userCamera.srcObject = stream;
+
+                mediaRecorder = new MediaRecorder(stream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const formData = new FormData();
+                    formData.append('file', blob, 'recording.webm');
+                    formData.append('pose', 'dumbbell_chest_press');
+
+                    try {
+                        const response = await fetch('http://localhost:3000/upload', {
+                            method: 'POST',
+                            body: formData,
+                        });
+
+                        if (response.ok) {
+                            console.log("Upload successful!");
+                            const result = await response.json();
+                            similarityDisplay.textContent = `相似度: ${result.similarity}%`;
+                        } else {
+                            similarityDisplay.textContent = '相似度: 分析失敗';
+                        }
+                    } catch (err) {
+                        console.error('上傳或分析失敗:', err);
+                        similarityDisplay.textContent = '相似度: 分析失敗';
+                    }
+                };
+            } catch (err) {
+                console.error('無法啟動攝影機:', err);
+            }
+        }
+
+        startBtn.addEventListener('click', () => {
+            recordedChunks = [];
+            mediaRecorder.start();
+            startBtn.disabled = true;
+
+            // 撥放範例影片
+            standardVideo.play();
+
+            // 在影片結束時停止錄製
+            standardVideo.onended = () => {
+                mediaRecorder.stop();
+                startBtn.disabled = false;
+            };
+        });
+
+        startCamera();
+    </script>
+</body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera with PoseNet</title>
+    <script src="https://unpkg.com/webcam-easy/dist/webcam-easy.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/posenet"></script>
+    <style>
+        video, canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        video {
+            z-index: 0;
+        }
+        canvas {
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <video id="webCam" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+    <script>
+        const webCamElement = document.getElementById("webCam");
+        const canvasElement = document.getElementById("canvas");
+        const ctx = canvasElement.getContext("2d");
+        const webcam = new Webcam(webCamElement, "user", canvasElement);
+
+        webcam.start()
+            .then(() => {
+                console.log("Webcam started successfully");
+                webCamElement.addEventListener('loadedmetadata', () => {
+                    canvasElement.width = webCamElement.videoWidth;
+                    canvasElement.height = webCamElement.videoHeight;
+                    console.log(`Canvas dimensions: ${canvasElement.width}x${canvasElement.height}`);
+                });
+                runPoseNet();
+            })
+            .catch(err => console.error("Error starting webcam:", err));
+
+        async function runPoseNet() {
+            const net = await posenet.load();
+            console.log("PoseNet loaded successfully");
+
+            // 確認 Video 準備好
+            await new Promise(resolve => {
+                if (webCamElement.readyState >= 2) {
+                    resolve();
+                } else {
+                    webCamElement.addEventListener('loadeddata', resolve);
+                }
+            });
+
+            detectPose(net);
+        }
+
+        async function detectPose(net) {
+            while (true) {
+                const pose = await net.estimateSinglePose(webCamElement, {
+                    flipHorizontal: true, // 啟用水平翻轉
+                });
+                drawPose(pose);
+                await tf.nextFrame();
+            }
+        }
+
+        function drawPose(pose) {
+            ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+
+            // 水平翻轉畫布
+            ctx.save();
+            ctx.scale(-1, 1);
+            ctx.translate(-canvasElement.width, 0);
+
+            // 繪製影像
+            ctx.drawImage(webCamElement, 0, 0, canvasElement.width, canvasElement.height);
+
+            ctx.restore();
+
+            // 繪製關鍵點
+            drawKeypoints(pose.keypoints);
+        }
+
+        function drawKeypoints(keypoints) {
+            keypoints.forEach(keypoint => {
+                const { x, y } = keypoint.position;
+                if (keypoint.score > 0.2) { // 繪製分數大於 0.2 的關鍵點
+                    ctx.beginPath();
+                    ctx.arc(x, y, 5, 0, 2 * Math.PI); 
+                    ctx.fillStyle = "lime"; // 使用紅色
+                    ctx.fill();
+                }
+            });
+        }
+    </script>
+</body>
+</html>
